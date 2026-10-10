@@ -1,0 +1,6 @@
+node_modules/
+dist/
+.generated/
+.aws-sam/
+*.tsbuildinfo
+__pycache__/

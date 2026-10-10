@@ -1,0 +1,72 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Tenet drainage maintenance dispatcher API and scenario results bucket.
+
+Globals:
+  Function:
+    Runtime: python3.12
+    Timeout: 10
+    MemorySize: 128
+    Environment:
+      Variables:
+        RESULTS_BUCKET: !Ref ScenarioResultsBucket
+
+Resources:
+  ScenarioResultsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  DispatcherApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      CorsConfiguration:
+        AllowOrigins:
+          - '*'
+        AllowMethods:
+          - GET
+        AllowHeaders:
+          - content-type
+      DefinitionBody:
+        openapi: 3.0.1
+        info:
+          title: Tenet Dispatcher API
+          version: '1.0'
+        paths: {}
+
+  RecommendationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: backend/
+      Handler: lambda_function.handler
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub '${ScenarioResultsBucket.Arn}/barapullah/*'
+      Events:
+        Recommendation:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref DispatcherApi
+            Path: /api/recommendation
+            Method: GET
+
+Outputs:
+  ApiBaseUrl:
+    Description: Set this as VITE_API_BASE_URL in Amplify Hosting.
+    Value: !Sub 'https://${DispatcherApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}'
+  ScenarioResultsBucketName:
+    Description: Upload .generated/deploy contents to this bucket.
+    Value: !Ref ScenarioResultsBucket
