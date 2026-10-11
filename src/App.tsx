@@ -97,7 +97,7 @@ function PlanPanel({ plan, baselineVolume, bestPlan }: { plan: Plan; baselineVol
 }
 
 export default function App() {
-  const [basinId, setBasinId] = useState<BasinId>('barapullah');
+  const [basinId, setBasinId] = useState<BasinId>('victoria-s61');
   const [crewLimit, setCrewLimit] = useState<1 | 2 | 3>(1);
   const [profileId, setProfileId] = useState<RainfallProfileId>('heavy');
   const [recommendation, setRecommendation] = useState<Recommendation | null>(null);
