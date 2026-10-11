@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { Plan, Recommendation, RainfallProfileId } from './types';
+import VictoriaCityMap from './VictoriaCityMap';
 
 // shortcut: this is a schematic because verified basin geometries are unavailable; use MapLibre once geographic assets are obtained.
 const drainIds = Array.from({ length: 8 }, (_, index) => `D${String(index + 1).padStart(2, '0')}`);
@@ -9,7 +10,7 @@ const rainfallProfiles: { id: RainfallProfileId; label: string }[] = [
   { id: 'extreme', label: 'Extreme' },
 ];
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? '';
-const basinId = 'barapullah';
+type BasinId = 'barapullah' | 'victoria-s61';
 
 function formatVolume(volume: number) {
   return new Intl.NumberFormat('en-IN', { maximumFractionDigits: 1 }).format(volume);
@@ -63,9 +64,10 @@ function NetworkDiagram({ recommendation }: { recommendation: Recommendation | n
   );
 }
 
-function PlanPanel({ plan, baselineVolume }: { plan: Plan; baselineVolume: number }) {
+function PlanPanel({ plan, baselineVolume, bestPlan }: { plan: Plan; baselineVolume: number; bestPlan?: Plan }) {
   const change = baselineVolume - plan.totalOverflowM3;
   const isRecommended = plan.id === 'network-aware';
+  const excessOverflow = bestPlan ? plan.totalOverflowM3 - bestPlan.totalOverflowM3 : 0;
   return (
     <article className={`plan-panel ${isRecommended ? 'is-recommended' : ''}`}>
       <div className="plan-heading">
@@ -82,11 +84,20 @@ function PlanPanel({ plan, baselineVolume }: { plan: Plan; baselineVolume: numbe
         <span>Cleaning actions</span>
         <strong>{plan.drainIds.length ? plan.drainIds.join(', ') : 'None'}</strong>
       </div>
+      {plan.id === 'independent' && bestPlan && <div className="plan-detail">
+        <span>Overflow above network-aware</span>
+        <strong>{excessOverflow > 0 ? `${formatVolume(excessOverflow)} m³` : 'Same result'}</strong>
+      </div>}
+      <details className="junction-results">
+        <summary>See overflow at each junction</summary>
+        <ol>{plan.junctions.map((junction) => <li key={junction.id}><span>{junction.id}</span><strong>{formatVolume(junction.overflowM3)} m³</strong></li>)}</ol>
+      </details>
     </article>
   );
 }
 
 export default function App() {
+  const [basinId, setBasinId] = useState<BasinId>('barapullah');
   const [crewLimit, setCrewLimit] = useState<1 | 2 | 3>(1);
   const [profileId, setProfileId] = useState<RainfallProfileId>('heavy');
   const [recommendation, setRecommendation] = useState<Recommendation | null>(null);
@@ -102,6 +113,7 @@ export default function App() {
       .then(async (response) => {
         const body = await response.json();
         if (!response.ok) throw new Error(body.message ?? 'The scenario results are unavailable.');
+        if (body.basin?.id !== basinId) throw new Error('The API returned results for a different network.');
         return body as Recommendation;
       })
       .then((result) => {
@@ -115,17 +127,25 @@ export default function App() {
         setLoading(false);
       });
     return () => controller.abort();
-  }, [crewLimit, profileId]);
+  }, [basinId, crewLimit, profileId]);
 
   const plans = recommendation?.plans ?? [];
   const noCleaning = plans.find((plan) => plan.id === 'no-cleaning');
+  const networkAware = plans.find((plan) => plan.id === 'network-aware');
+  const baselineActions = new Set(plans.find((plan) => plan.id === 'independent')?.drainIds ?? []);
+  const recommendedActions = new Set(networkAware?.drainIds ?? []);
 
   return (
     <main className="page-shell">
       <header className="topbar">
         <a className="brand" href="#top" aria-label="Tenet home"><span className="brand-mark">T</span><span>Tenet</span></a>
-        <div className="topbar-context"><span className="live-dot" /> Dispatch planning <span className="context-divider">/</span> Barapullah basin</div>
-        <span className="simulation-badge">Illustrative model</span>
+        <div className="topbar-context"><span className="live-dot" /> Dispatch planning</div>
+        <label className="basin-select-label" htmlFor="basin-select">Network</label>
+        <select id="basin-select" className="basin-select" value={basinId} onChange={(event) => setBasinId(event.target.value as BasinId)}>
+          <option value="barapullah">Delhi · Barapullah</option>
+          <option value="victoria-s61">Victoria · S61 GIS pilot</option>
+        </select>
+        <span className={`simulation-badge ${basinId === 'victoria-s61' ? 'is-gis' : ''}`}>{basinId === 'victoria-s61' ? 'Uncalibrated GIS pilot' : 'Illustrative model'}</span>
       </header>
 
       <section className="intro" id="top">
@@ -135,14 +155,29 @@ export default function App() {
           <p className="intro-copy">Compare cleaning choices by how they change overflow across a connected network.</p>
         </div>
         <div className="run-stamp">
-          <span className="stamp-label">Model run</span>
-          <strong>{loading ? 'Loading scenario' : error ? 'Results unavailable' : 'Ready'}</strong>
-          <span>EPA SWMM · {recommendation?.rainfallProfile.label ?? 'selected profile'}</span>
+            <span className="stamp-label">Model run</span>
+            <strong>{loading ? 'Loading scenario' : error ? 'Results unavailable' : 'Ready'}</strong>
+            <span>{recommendation ? `${recommendation.model.engine} · ${recommendation.rainfallProfile.label}` : 'Select a network scenario'}</span>
         </div>
       </section>
 
       <section className="workspace" aria-label="Planning controls and network results">
-        <aside className="control-rail">
+        <aside className={`control-rail ${basinId === 'victoria-s61' ? 'is-victoria' : ''}`}>
+          {basinId === 'victoria-s61' ? (
+            <div className="victoria-rail-note">
+              <p className="section-kicker">Mapped pilot network</p>
+              <h2>S61 · Victoria, BC</h2>
+              <p>Decision support for this small pilot, using source GIS assets and uncalibrated SWMM scenarios.</p>
+              <p className="assumption-note">These results use explicit demonstration assumptions; they are not field-verified or operational recommendations.</p>
+              <div className="evidence-note">
+                <strong>Evidence review · preliminary</strong>
+                <p>No expert review or event-level rainfall/flood comparison has been completed. These scenarios are not calibrated to observations and do not establish real-world flood reduction.</p>
+                <a href="/victoria-s61-review.md" target="_blank" rel="noreferrer">Read evidence review</a>
+              </div>
+              <a href="https://maps.victoria.ca/server/rest/services/OpenData/OpenData_StormDrain/MapServer" target="_blank" rel="noreferrer">Open City of Victoria source</a>
+            </div>
+          ) : null}
+          <>
           <div className="rail-section">
             <p className="section-kicker">Rainfall profile</p>
             <div className="profile-picker" role="group" aria-label="Rainfall profile">
@@ -155,51 +190,61 @@ export default function App() {
             <div className="profile-name">{recommendation?.rainfallProfile.label ?? 'Loading'}</div>
             <div className="profile-stat"><span>Total depth</span><strong>{recommendation ? `${recommendation.rainfallProfile.totalDepthMm} mm` : '—'}</strong></div>
             <div className="profile-stat"><span>Duration</span><strong>{recommendation ? `${recommendation.rainfallProfile.durationHours} hours` : '—'}</strong></div>
-            <p className="assumption-note">Illustrative uniform rainfall; not a local design storm. Profiles are shown separately without assigned probabilities.</p>
+            <p className="assumption-note">{basinId === 'victoria-s61' ? 'Illustrative uniform rainfall; not a Victoria design storm. Profiles are shown separately without probabilities.' : 'Illustrative uniform rainfall; not a local design storm. Profiles are shown separately without assigned probabilities.'}</p>
           </div>
 
           <div className="rail-section crew-section">
-            <p className="section-kicker">Crews available</p>
-            <div className="crew-picker" role="group" aria-label="Maximum crews available">
-              {[1, 2, 3].map((count) => (
-                <button key={count} type="button" aria-pressed={crewLimit === count} onClick={() => setCrewLimit(count as 1 | 2 | 3)}>
-                  <strong>{count}</strong><span>{count === 1 ? 'crew' : 'crews'}</span>
-                </button>
-              ))}
+            <label className="section-kicker" htmlFor="crew-limit">{basinId === 'victoria-s61' ? 'S61 model crews' : 'Crews available'}</label>
+            <div className="crew-count-input">
+              <input id="crew-limit" type="number" min="1" max="3" step="1" value={crewLimit} onChange={(event) => {
+                const count = event.currentTarget.valueAsNumber;
+                if (Number.isInteger(count) && count >= 1 && count <= 3) setCrewLimit(count as 1 | 2 | 3);
+              }} />
+              <span>crews</span>
             </div>
-            <p className="assumption-note">One cleaning job per crew. Jobs finish before rainfall begins.</p>
+            <p className="assumption-note">{basinId === 'victoria-s61' ? 'This separate S61 SWMM comparison supports 1–3 modeled cleaning jobs. Citywide GIS assignments are shown with the map.' : 'Enter 1–3 crews. Current SWMM scenarios support up to three cleaning jobs, one per crew, completed before rainfall.'}</p>
           </div>
 
-          <div className="rail-section assumption-list">
+          {basinId === 'barapullah' && <div className="rail-section assumption-list">
             <p className="section-kicker">Model assumptions</p>
             <p><span className="assumption-dot" />Fixed blockage by drain</p>
             <p><span className="assumption-dot" />Cleaning removes assumed blockage</p>
             <p><span className="assumption-dot" />Equal weight for every junction</p>
-          </div>
+          </div>}
 
-          <div className="context-note">
+          {basinId === 'barapullah' && <div className="context-note">
             <span className="context-icon" aria-hidden="true">⌁</span>
             <div>
               <strong>DMP waterlogging context</strong>
               <p>The report lists 330 traffic-police-reported segments citywide. They are not mapped to this illustrative network.</p>
               <a href="https://ifc.delhi.gov.in/sites/default/files/inline-files/main_report_dmp_version51.pdf" target="_blank" rel="noreferrer">Open DMP report</a>
             </div>
-          </div>
+          </div>}
+          {basinId === 'victoria-s61' && recommendation && <details className="rail-section model-details">
+            <summary>Model assumptions and data gaps</summary>
+            <strong>Assumptions</strong>
+            <ul>{recommendation.assumptions?.map((item) => <li key={item}>{item}</li>)}</ul>
+            <strong>Data gaps</strong>
+            <ul>{recommendation.dataGaps?.map((item) => <li key={item}>{item}</li>)}</ul>
+          </details>}
+          </>
         </aside>
 
         <section className="network-section" aria-labelledby="network-heading">
           <div className="section-heading">
             <div>
-              <p className="section-kicker">Illustrative subnetwork</p>
-              <h2 id="network-heading">Eight candidate drains</h2>
+              <p className="section-kicker">{basinId === 'victoria-s61' ? 'Citywide GIS allocation · S61 hydraulic pilot separate' : 'Illustrative subnetwork'}</p>
+              <h2 id="network-heading">{basinId === 'victoria-s61' ? 'Victoria storm-drain network' : 'Eight candidate drains'}</h2>
             </div>
-            <span className="map-key"><i className="key-line" /> Drain <i className="key-dot" /> Junction</span>
+            {basinId === 'barapullah' && <span className="map-key"><i className="key-line" /> Drain <i className="key-dot" /> Junction</span>}
           </div>
           <div className="map-frame">
-            <NetworkDiagram recommendation={recommendation} />
+            {basinId === 'victoria-s61' ? <>
+              <VictoriaCityMap recommendedAssetIds={recommendation?.plans.find((plan) => plan.id === 'network-aware')?.drainIds ?? []} />
+            </> : <NetworkDiagram recommendation={recommendation} />}
           </div>
           <div className={`result-state ${error ? 'has-error' : ''}`} aria-live="polite">
-            {loading ? <><span className="state-mark loading-mark" />Loading the precomputed SWMM result…</> : error ? <><span className="state-mark error-mark" />{error}</> : <><span className="state-mark ready-mark" />Result calculated from precomputed SWMM outcomes.</>}
+            {loading ? <><span className="state-mark loading-mark" />Loading the precomputed SWMM result…</> : error ? <><span className="state-mark error-mark" />{error}</> : <><span className="state-mark ready-mark" />{basinId === 'victoria-s61' ? 'EPA SWMM scenario · uncalibrated demonstration' : 'Result calculated from precomputed SWMM outcomes.'}</>}
           </div>
         </section>
       </section>
@@ -210,23 +255,40 @@ export default function App() {
             <p className="section-kicker">Plan comparison</p>
             <h2 id="comparison-heading">Where should the crews go?</h2>
           </div>
-          <p>At most {crewLimit} {crewLimit === 1 ? 'job' : 'jobs'} · all plans use the same rainfall and blockage assumptions</p>
+          <p>{basinId === 'victoria-s61' ? `S61 hydraulic comparison · at most ${crewLimit} modeled ${crewLimit === 1 ? 'job' : 'jobs'}` : `At most ${crewLimit} ${crewLimit === 1 ? 'job' : 'jobs'} · all plans use the same rainfall and blockage assumptions`}</p>
         </div>
-        {error ? (
+        {loading ? (
+          <div className="empty-results"><strong>Loading scenario results…</strong></div>
+        ) : error ? (
           <div className="empty-results">
             <strong>Could not load the scenario result.</strong>
             <span>{error}</span>
           </div>
         ) : (
+          <>
           <div className="plan-grid">
-            {plans.map((plan) => <PlanPanel key={plan.id} plan={plan} baselineVolume={noCleaning?.totalOverflowM3 ?? 0} />)}
+            {plans.map((plan) => <PlanPanel key={plan.id} plan={plan} baselineVolume={noCleaning?.totalOverflowM3 ?? 0} bestPlan={networkAware} />)}
           </div>
+          {!!recommendation?.rankedActions?.length && <section className="action-ranking" aria-labelledby="action-ranking-title">
+            <div>
+              <p className="section-kicker">Single-asset model comparison</p>
+              <h3 id="action-ranking-title">Ranked cleaning actions</h3>
+              <p>Each asset is simulated alone for the selected rainfall profile. The multi-asset recommendation can differ because flows interact.</p>
+            </div>
+            <ol>{recommendation.rankedActions.map((action) => <li key={action.assetId}>
+              <span className="action-rank">{action.rank}</span>
+              <strong>{action.assetId}</strong>
+              <span>{action.overflowReductionM3 > 0 ? `−${formatVolume(action.overflowReductionM3)} m³` : `${formatVolume(action.overflowReductionM3)} m³`}</span>
+              <span className="action-tags">{baselineActions.has(action.assetId) && <i>Single-asset baseline</i>}{recommendedActions.has(action.assetId) && <i>Network-aware plan</i>}</span>
+            </li>)}</ol>
+          </section>}
+          </>
         )}
       </section>
 
       <footer className="page-footer">
-        <span>Model simulations · not real-time predictions or guaranteed avoided damage.</span>
-        <span>{recommendation?.model.engine ?? 'EPA SWMM'} · {recommendation?.rainfallProfile.label ?? 'Heavy illustrative profile'}</span>
+        <span>{basinId === 'victoria-s61' ? 'Uncalibrated simulation · not a field-verified prediction or operational recommendation.' : 'Model simulations · not real-time predictions or guaranteed avoided damage.'}</span>
+        <span>{recommendation?.basin.label ?? (basinId === 'victoria-s61' ? 'Victoria S61 · no scenario loaded' : 'Barapullah · no scenario loaded')}</span>
       </footer>
     </main>
   );

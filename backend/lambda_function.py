@@ -3,7 +3,8 @@ import os
 from pathlib import Path
 
 
-RESULTS = Path(__file__).resolve().parents[1] / ".generated" / "results.json"
+ROOT = Path(__file__).resolve().parents[1]
+RESULTS = ROOT / ".generated" / "results.json"
 
 
 def response(status_code, body):
@@ -17,6 +18,9 @@ def response(status_code, body):
 def load_results(basin_id, profile_id):
     bucket = os.environ.get("RESULTS_BUCKET")
     if not bucket:
+        if basin_id == "victoria-s61":
+            path = ROOT / ".generated" / "deploy" / basin_id / f"{profile_id}.json"
+            return json.loads(path.read_text(encoding="utf-8"))
         return json.loads(RESULTS.read_text(encoding="utf-8"))
 
     import boto3
@@ -41,8 +45,8 @@ def handler(event, _context):
 
     params = event.get("queryStringParameters") or {}
     basin_id = params.get("basin")
-    if basin_id != "barapullah":
-        return response(400, {"message": "Basin must be barapullah."})
+    if basin_id not in ("barapullah", "victoria-s61"):
+        return response(400, {"message": "Basin must be barapullah or victoria-s61."})
     try:
         crew_limit = int(params.get("crewLimit", "1"))
     except (TypeError, ValueError):
@@ -62,6 +66,8 @@ def handler(event, _context):
     except (OSError, json.JSONDecodeError, RuntimeError):
         return response(500, {"message": "The SWMM result bundle could not be read."})
 
+    if results.get("metadata", {}).get("basin", {}).get("id") != basin_id:
+        return response(500, {"message": "The SWMM result bundle is incomplete."})
     scenario = results.get("scenarios", {}).get(profile_id, results)
     if scenario.get("rainfallProfile", {}).get("id") != profile_id:
         scenario = None
@@ -74,5 +80,6 @@ def handler(event, _context):
         **results["metadata"],
         "rainfallProfile": scenario["rainfallProfile"],
         "crewLimit": crew_limit,
+        "rankedActions": scenario.get("rankedActions", []),
         "plans": plans,
     })

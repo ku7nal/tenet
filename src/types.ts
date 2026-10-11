@@ -11,6 +11,12 @@ export type Plan = {
   junctions: JunctionResult[];
 };
 
+export type RankedAction = {
+  rank: number;
+  assetId: string;
+  overflowReductionM3: number;
+};
+
 export type RainfallProfileId = 'moderate' | 'heavy' | 'extreme';
 
 export type Recommendation = {
@@ -24,8 +30,11 @@ export type Recommendation = {
     source: string;
   };
   crewLimit: 1 | 2 | 3;
+  rankedActions?: RankedAction[];
   blockageAssumption: string;
-  model: { engine: string; runStatus: string };
-  dmpContext: { reportedSegmentCount: number; mappedToNetwork: false };
+  model: { engine: string; runStatus: string; calibration?: string };
+  dmpContext?: { reportedSegmentCount: number; mappedToNetwork: false };
+  assumptions?: string[];
+  dataGaps?: string[];
   plans: Plan[];
 };

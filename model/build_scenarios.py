@@ -214,6 +214,10 @@ def main():
             for drain in DRAIN_IDS
         }
         ranked = sorted(DRAIN_IDS, key=lambda drain: (-individual_benefit[(drain,)], drain))
+        ranked_actions = [
+            {"rank": index + 1, "assetId": drain, "overflowReductionM3": round(individual_benefit[(drain,)], 3)}
+            for index, drain in enumerate(ranked)
+        ]
         for crew_limit in (1, 2, 3):
             candidates = [subset for subset in feasible_sets if len(subset) <= crew_limit]
             best = min(candidates, key=lambda subset: (sum(outcomes[subset].values()), subset))
@@ -228,6 +232,7 @@ def main():
             ]
         scenarios[profile["id"]] = {
             "rainfallProfile": profile,
+            "rankedActions": ranked_actions,
             "plansByCrewLimit": plans_by_crew,
         }
 

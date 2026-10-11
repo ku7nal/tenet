@@ -15,6 +15,7 @@ Resources:
   ScenarioResultsBucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
@@ -55,6 +56,10 @@ Resources:
               Action:
                 - s3:GetObject
               Resource: !Sub '${ScenarioResultsBucket.Arn}/barapullah/*'
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub '${ScenarioResultsBucket.Arn}/victoria-s61/*'
       Events:
         Recommendation:
           Type: HttpApi

@@ -1,6 +1,6 @@
 # Tenet dispatcher
 
-This local dispatcher slice compares moderate, heavy, and extreme illustrative rainfall profiles and crew limits of one to three for the Barapullah basin context.
+This dispatcher compares moderate, heavy, and extreme rainfall scenarios and crew limits of one to three for the illustrative Barapullah network and a separate, uncalibrated Victoria S61 GIS pilot.
 
 ## Run locally
 
@@ -12,13 +12,20 @@ This local dispatcher slice compares moderate, heavy, and extreme illustrative r
    ```
 
    Or set `SWMM_BIN` to the executable path and omit `--swmm`.
-3. Start the API in one terminal:
+3. To generate the Victoria S61 demonstration scenarios as well, run:
+
+   ```sh
+   python3 model/build_victoria_scenarios.py --swmm /path/to/runswmm
+   ```
+
+   This evaluates 576 feasible cleaning sets for each of the three profiles and writes results under `.generated/deploy/victoria-s61/`. Its source units, rainfall, runoff and cleaning assumptions are documented in [model notes](model/victoria-s61-model.md). These are uncalibrated simulations, not engineering recommendations.
+4. Start the API in one terminal:
 
    ```sh
    python3 backend/dev_server.py
    ```
 
-4. Start the dashboard in another terminal:
+5. Start the dashboard in another terminal:
 
    ```sh
    npm install
@@ -29,7 +36,7 @@ The generated result bundle is local and ignored by git. The browser shows an ex
 
 ## Deploy on AWS
 
-The SAM template deploys the HTTP API, Lambda, and a private S3 bucket. Amplify Hosting deploys the static dashboard separately. The API is public and read-only; it only accepts the fixed Barapullah basin, three supported rainfall profiles, and crew limits from one to three.
+The SAM template deploys the HTTP API, Lambda, and a private S3 bucket. Amplify Hosting deploys the static dashboard separately. The API is public and read-only; it accepts the fixed Barapullah or Victoria S61 basin, three supported rainfall profiles, and crew limits from one to three. Reuse terms for the exact Victoria source GIS layers are still unconfirmed; confirm them before publishing those source data or derived results.
 
 1. Generate the scenarios as above. This also writes one deployable JSON file per profile under `.generated/deploy/barapullah/`.
 2. Install and configure the AWS CLI and AWS SAM CLI for an account with permission to create the SAM stack, then run:
@@ -49,7 +56,7 @@ The SAM template deploys the HTTP API, Lambda, and a private S3 bucket. Amplify 
 
 4. In the Amplify console, connect the repository and branch for Hosting. Amplify uses `amplify.yml`. Add the `VITE_API_BASE_URL` environment variable with the stack's `ApiBaseUrl` output, then redeploy the branch.
 
-The dashboard build is static; SWMM runs only during local preprocessing. The API role can read only objects under `barapullah/`, and the S3 bucket blocks public access. The API endpoint itself is public, so anyone can request the precomputed results. AWS deployment can incur charges; review the services and account settings before deploying. Deleting the SAM stack retains the results bucket to protect uploaded scenario data.
+The dashboard build is static; SWMM runs only during local preprocessing. The API role can read only objects under `barapullah/` and `victoria-s61/`, and the S3 bucket blocks public access. The API endpoint itself is public, so anyone can request the precomputed results. AWS deployment can incur charges; review the services and account settings before deploying. Deleting or replacing the SAM stack retains the results bucket to protect uploaded scenario data.
 
 ## Model assumptions
 
@@ -57,3 +64,7 @@ The dashboard build is static; SWMM runs only during local preprocessing. The AP
 - The eight candidate conduits form a hand-built serial network. Each assumes 40% blockage by cross-sectional area; cleaning restores its full illustrative diameter.
 - Network geometry is schematic, not georeferenced. The DMP report's 330 traffic-police-reported waterlogging segments are citywide context and are not plotted or mapped to the model junctions.
 - Results are model simulations only. They are not flood predictions or avoided-damage estimates.
+- Victoria S61 uses 15 City GIS gravity mains, 15 manholes, and one outfall. Its source units and vertical datum are unverified; runoff, rainfall, blockage, and outfall assumptions are not calibrated against observations. S61 output is separate from Barapullah and is not an operational recommendation.
+- The Victoria map shows all saved citywide City GIS gravity mains, manholes, and outfalls; paths and nodes can be selected to inspect source attributes. Only the 15-main S61 subset has precomputed SWMM comparisons. Rebuild the map asset from saved source exports with `python3 model/build_victoria_city_map.py`.
+- The map's draft citywide roster accepts up to the eligible active City-owned storm gravity-main count. It assigns one main per crew by recorded City GIS `ImportanceFactor` (High, Medium, Low, then unrated), with asset ID as a stable tie-breaker. This is inventory allocation only, not condition-based cleaning urgency or a hydraulic/flood-reduction recommendation. The separate S61 SWMM crew limit remains one to three.
+- A preliminary Victoria evidence review identifies ECCC rainfall records and documents why no event comparison or expert review is claimed yet. See [the review](public/victoria-s61-review.md).

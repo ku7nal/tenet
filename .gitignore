@@ -4,3 +4,5 @@ dist/
 .aws-sam/
 *.tsbuildinfo
 __pycache__/
+# Playwright CLI output (may contain credentials)
+.playwright-cli/
