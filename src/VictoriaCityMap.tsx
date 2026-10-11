@@ -138,6 +138,7 @@ export default function VictoriaCityMap({ recommendedAssetIds = [] }: { recommen
   const [worklistOpen, setWorklistOpen] = useState(false);
   const [viewport, setViewport] = useState(initialViewport);
   const [isDragging, setIsDragging] = useState(false);
+  const mapCanvasRef = useRef<HTMLDivElement | null>(null);
   const dragStart = useRef<{ x: number; y: number; viewport: MapViewport } | null>(null);
   const dragged = useRef(false);
 
@@ -200,6 +201,21 @@ export default function VictoriaCityMap({ recommendedAssetIds = [] }: { recommen
   const selectedInPilot = selected && pilotNetwork.features.some((feature) =>
     feature.properties.mapLayer === selected.properties.mapLayer && String(feature.properties.AssetID) === featureId(selected));
   const selectedCrew = selected ? cityWorklist.findIndex((feature) => featureId(feature) === featureId(selected)) + 1 : 0;
+  const focusAssignment = (feature: CityFeature) => {
+    const projected = coordinates(feature).map(map.project);
+    if (!projected.length) return;
+    const xs = projected.map(([x]) => x);
+    const ys = projected.map(([, y]) => y);
+    const centerX = (Math.min(...xs) + Math.max(...xs)) / 2;
+    const centerY = (Math.min(...ys) + Math.max(...ys)) / 2;
+    const extent = Math.max(Math.max(...xs) - Math.min(...xs), (Math.max(...ys) - Math.min(...ys)) * width / height);
+    const viewWidth = Math.max(width / 8, Math.min(width / 0.65, extent * 6));
+    const viewHeight = viewWidth * height / width;
+    setSelected(feature);
+    setShowMains(true);
+    setViewport({ x: centerX - viewWidth / 2, y: centerY - viewHeight / 2, width: viewWidth, height: viewHeight });
+    mapCanvasRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   const selectFeature = (event: MouseEvent<SVGSVGElement>) => {
     if (dragged.current) {
@@ -300,7 +316,7 @@ export default function VictoriaCityMap({ recommendedAssetIds = [] }: { recommen
         {validCrewCount ? <div className="city-worklist-actions">
           <details className="city-worklist" onToggle={(event) => setWorklistOpen(event.currentTarget.open)}>
             <summary>View {cityWorklist.length.toLocaleString('en-CA')} draft assignments</summary>
-            {worklistOpen && <ol>{cityWorklist.map((feature, index) => <li key={featureId(feature)}><span>Crew {index + 1}</span><strong>{featureId(feature)}</strong><small>Importance: {({ H: 'High', M: 'Medium', L: 'Low' } as Record<string, string>)[String(feature.properties.ImportanceFactor)] ?? 'Unrated'}</small></li>)}</ol>}
+            {worklistOpen && <ol>{cityWorklist.map((feature, index) => <li key={featureId(feature)}><button className={`city-worklist-select${selected === feature ? ' is-selected' : ''}`} type="button" aria-pressed={selected === feature} onClick={() => focusAssignment(feature)}><span>Crew {index + 1}</span><strong>{featureId(feature)}</strong><small>Importance: {({ H: 'High', M: 'Medium', L: 'Low' } as Record<string, string>)[String(feature.properties.ImportanceFactor)] ?? 'Unrated'}</small></button></li>)}</ol>}
           </details>
           <button className="city-worklist-download" type="button" onClick={() => downloadWorklist(cityWorklist)}>Download draft CSV</button>
         </div> : <p className="city-allocation-error" role="alert">Enter a whole number from 1 to {cityCandidates.length.toLocaleString('en-CA')}.</p>}
@@ -311,7 +327,7 @@ export default function VictoriaCityMap({ recommendedAssetIds = [] }: { recommen
         <label><input type="checkbox" checked={showOutfalls} onChange={(event) => setShowOutfalls(event.target.checked)} /> Outfalls <span>{counts.outfall.toLocaleString('en-CA')}</span></label>
         <span className="city-map-scope">Hydraulic recommendations apply to the S61 pilot only</span>
       </div>
-      <div className="city-map-canvas">
+      <div className="city-map-canvas" ref={mapCanvasRef}>
         <div className="city-map-zoom" role="group" aria-label="Map navigation">
           <button type="button" aria-label="Zoom in" onClick={() => zoom(0.75)}>+</button>
           <button type="button" aria-label="Zoom out" onClick={() => zoom(1.33)}>−</button>

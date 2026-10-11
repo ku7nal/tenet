@@ -147,8 +147,12 @@ h1 { margin-bottom: 12px; font-family: 'Iowan Old Style', 'Palatino Linotype', G
 .city-worklist-download:hover { background: #e8eee8; }
 .city-worklist-download:focus-visible { outline: 3px solid #d88a42; outline-offset: 2px; }
 .city-worklist ol { max-height: 260px; overflow: auto; margin: 9px 0 0; padding: 0; border-top: 1px solid var(--line); list-style: none; }
-.city-worklist li { display: grid; grid-template-columns: 90px minmax(100px, 1fr) auto; gap: 10px; padding: 7px 4px; border-bottom: 1px solid #e2e6df; font-size: 10px; }
-.city-worklist li span, .city-worklist li small { color: #65736e; }
+.city-worklist li { padding: 0; border-bottom: 1px solid #e2e6df; font-size: 10px; }
+.city-worklist-select { display: grid; width: 100%; grid-template-columns: 90px minmax(100px, 1fr) auto; gap: 10px; padding: 7px 4px; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.city-worklist-select span, .city-worklist-select small { color: #65736e; }
+.city-worklist-select:hover, .city-worklist-select.is-selected { background: #e8eee8; }
+.city-worklist-select.is-selected { box-shadow: inset 3px 0 var(--teal); }
+.city-worklist-select:focus-visible { outline: 3px solid #d88a42; outline-offset: -3px; }
 .city-allocation-error { margin: 0; color: #a64231; font-size: 11px; }
 .city-map-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 9px 20px; color: #52635d; font-size: 11px; }
 .city-map-controls label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
@@ -269,8 +273,8 @@ h1 { margin-bottom: 12px; font-family: 'Iowan Old Style', 'Palatino Linotype', G
   .city-map-content { padding: 8px; }
   .city-allocation-heading { grid-template-columns: 1fr auto; gap: 7px 10px; }
   .city-allocation-heading h3 { font-size: 18px; }
-  .city-worklist li { grid-template-columns: 62px 1fr; gap: 4px 8px; }
-  .city-worklist li small { grid-column: 2; }
+  .city-worklist-select { grid-template-columns: 62px 1fr; gap: 4px 8px; }
+  .city-worklist-select small { grid-column: 2; }
   .city-map-controls { gap: 8px 12px; font-size: 10px; }
   .city-map-scope { width: 100%; margin-left: 0; }
   .citywide-map { min-height: 250px; }
